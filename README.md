@@ -7,7 +7,7 @@ Three ways to run the same code — pick one:
 
 | Mode | Where it runs | Reply speed | Needs |
 |---|---|---|---|
-| **Instant** (recommended) | Hugging Face Space — free Docker container, long-polling 24/7 | seconds | free HF account, 3-file upload |
+| **Instant** (recommended) | Koyeb — free Docker container, long-polling 24/7, deploys straight from this repo | seconds | free Koyeb account |
 | **Fallback** | GitHub Actions cron poller | ~5–10 min | nothing but this repo |
 | **Local** | your own machine / Docker | seconds (while it's on) | Python or Docker |
 
@@ -24,36 +24,35 @@ published with GitHub Pages as a landing page.
 Talk to [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`,
 and copy the token it gives you (looks like `123456789:AAF...`).
 
-## Instant mode (replies in seconds) — Hugging Face Space
+## Instant mode (replies in seconds) — Koyeb
 
-Run the same bot 24/7 in a free Hugging Face Docker Space (no credit card).
-The whole thing is a drag-and-drop of 3 files:
+Run the bot 24/7 in a free Koyeb container. Koyeb builds straight from this
+GitHub repo — nothing to upload:
 
-1. **Create a free account** at [huggingface.co](https://huggingface.co),
-   then create a Space at [huggingface.co/new-space](https://huggingface.co/new-space):
-   - Space name: `ytmd-bot` (anything works)
-   - SDK: **Docker** → **Blank**
-   - Hardware: **CPU basic (free)**
-   - Visibility: **Private** (recommended)
+1. **Sign up** at [koyeb.com](https://www.koyeb.com) (log in with GitHub).
 
-2. **Upload the bot** — on the Space page open **Files → + Add file →
-   Upload files**, and drag in these 3 files from this repo:
-   `bot.py`, `requirements.txt`, `Dockerfile`. Commit.
+2. **Create the service** — click **Create Web Service → GitHub**, pick this
+   repository (and your default branch). Koyeb auto-detects the `Dockerfile`.
 
-3. **Add your token** — in the Space's **Settings → Variables and secrets**,
-   add a **secret** named `TELEGRAM_BOT_TOKEN` with your BotFather token.
-   The Space rebuilds and the bot is live — message it and it answers in
-   seconds.
+3. **Configure** (all on the same creation page):
+   - Instance type: **Free**
+   - **Environment variables**: add `TELEGRAM_BOT_TOKEN` = your BotFather
+     token (mark it as a secret)
+   - **Exposed port**: set it to `7860` (the health endpoint)
 
-4. **Keep it awake** (recommended) — free Spaces pause after 48 hours
-   without web traffic. In this GitHub repo add a repository **variable**
-   (Settings → Secrets and variables → Actions → Variables):
-   - `KEEP_ALIVE_URL` = the Space's direct URL, shown in the Space's
-     **Embed this Space** dialog (looks like
-     `https://your-hf-username-ytmd-bot.hf.space`).
+4. **Deploy** — after the build finishes, message your bot: it answers in
+   seconds. Koyeb redeploys automatically whenever the repo's default
+   branch changes.
 
-   The 5-minute GitHub workflow then pings it forever. Alternatively, any
-   free uptime monitor (e.g. UptimeRobot) pointed at that URL works too.
+5. **Keep it awake** (recommended) — Koyeb's free instances scale down when
+   idle, which adds a cold-start delay to the first reply. Copy the service's
+   public URL (`https://....koyeb.app`) and in this GitHub repo add a
+   repository **variable** (Settings → Secrets and variables → Actions →
+   Variables):
+   - `KEEP_ALIVE_URL` = that URL
+
+   The 5-minute GitHub workflow then pings it so it never sleeps.
+   Alternatively, any free uptime monitor (e.g. UptimeRobot) works too.
 
 > ⚠️ Run **one** consumer at a time: if you use instant mode, either set
 > `KEEP_ALIVE_URL` (which switches the GitHub cron from polling to pinging
@@ -61,14 +60,19 @@ The whole thing is a drag-and-drop of 3 files:
 > all. Two pollers on the same token steal each other's messages.
 
 <details>
-<summary><b>Optional: auto-deploy from GitHub instead of uploading manually</b></summary>
+<summary><b>Other hosts that run the same Dockerfile</b></summary>
 
-If you'd rather have GitHub push the bot to the Space on every code change:
-create a Hugging Face access token with **Write** permission
-([Settings → Access Tokens](https://huggingface.co/settings/tokens)), then in
-this repo add secret `HF_TOKEN` = that token and variable `HF_SPACE` =
-`your-hf-username/ytmd-bot`, and run the **Deploy to Hugging Face Space**
-workflow once from the Actions tab.
+Nothing in this repo is Koyeb-specific — any container host works:
+
+- **Railway** ([railway.com](https://railway.com)): New Project → Deploy
+  from GitHub repo → add the `TELEGRAM_BOT_TOKEN` variable. Slickest
+  experience, but the free trial credit is one-time (~$5), then it's paid.
+- **Hugging Face Spaces**: create a Docker Space and upload `bot.py`,
+  `requirements.txt`, `Dockerfile`; add `TELEGRAM_BOT_TOKEN` as a Space
+  secret. The `Deploy to Hugging Face Space` workflow in this repo can
+  automate that (set secret `HF_TOKEN` + variable `HF_SPACE`).
+- **Fly.io / Google Cloud Run / any VPS**: `docker run` the image with
+  `TELEGRAM_BOT_TOKEN` set.
 </details>
 
 ## Fallback mode — GitHub Actions only (no extra accounts)
@@ -108,7 +112,7 @@ default branch (or run it manually once).
 
 ```
 bot.py                           # Telegram → yt-dlp → MP3 (one-shot + --loop modes)
-Dockerfile                       # container for instant mode (HF Space)
+Dockerfile                       # container for instant mode (Koyeb / any host)
 .github/workflows/bot.yml        # cron: poll Telegram, or keep-alive ping
 .github/workflows/deploy-hf.yml  # optional auto-deploy to the HF Space
 .github/workflows/pages.yml      # GitHub Pages deploy of docs/

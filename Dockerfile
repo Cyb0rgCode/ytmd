@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY bot.py .
 
-# Hugging Face Spaces routes traffic to this port for the health check.
+# Health-check port; container hosts route HTTP probes here.
 ENV PORT=7860
 EXPOSE 7860
 
