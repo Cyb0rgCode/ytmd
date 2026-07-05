@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Telegram YouTube Music downloader bot.
 
-Runs as a short-lived poller (designed for GitHub Actions cron):
-  1. Fetches pending Telegram updates via getUpdates.
-  2. For every message containing a YouTube / YouTube Music URL,
-     downloads the audio with yt-dlp and sends it back as an MP3.
-  3. Acknowledges the processed updates so the next run starts clean.
+Two run modes:
+  default   - one-shot poll (for GitHub Actions cron): fetch pending
+              updates, process them, acknowledge, exit.
+  --loop    - persistent long-polling (for Render/Railway/any container
+              host): replies within seconds. Also serves a tiny HTTP
+              health endpoint on $PORT so free web-service tiers accept it.
+
+For every message containing a YouTube / YouTube Music URL, the bot
+downloads the audio with yt-dlp and sends it back as a tagged MP3.
 
 Required environment:
   TELEGRAM_BOT_TOKEN  - bot token from @BotFather
 
 Optional environment:
+  PORT                - health endpoint port in --loop mode (default 10000)
   YTDLP_COOKIES       - contents of a Netscape cookies.txt; helps when
                         YouTube blocks datacenter IPs with a bot check.
 """
@@ -20,7 +25,10 @@ import os
 import re
 import sys
 import tempfile
+import threading
+import time
 import traceback
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import requests
 import yt_dlp
@@ -185,18 +193,7 @@ def handle_message(msg: dict, cookies: str | None):
             )
 
 
-def main() -> int:
-    if not BOT_TOKEN:
-        print("TELEGRAM_BOT_TOKEN is not set", file=sys.stderr)
-        return 1
-
-    updates = tg("getUpdates", timeout=0, limit=100, allowed_updates='["message"]')
-    if not updates:
-        print("No pending updates.")
-        return 0
-
-    print(f"Processing {len(updates)} update(s)...")
-    cookies = cookies_file()
+def process_updates(updates: list, cookies: str | None):
     for update in updates:
         msg = update.get("message")
         if msg:
@@ -205,11 +202,72 @@ def main() -> int:
             except Exception:  # keep going; one bad message must not stall the queue
                 traceback.print_exc()
 
+
+def run_once() -> int:
+    """One-shot mode for GitHub Actions cron."""
+    updates = tg("getUpdates", timeout=0, limit=100, allowed_updates='["message"]')
+    if not updates:
+        print("No pending updates.")
+        return 0
+
+    print(f"Processing {len(updates)} update(s)...")
+    process_updates(updates, cookies_file())
+
     # Acknowledge everything we just processed so the next run starts fresh.
     last_id = updates[-1]["update_id"]
     tg("getUpdates", offset=last_id + 1, limit=1, timeout=0)
     print("Done.")
     return 0
+
+
+class _Health(BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802 - stdlib naming
+        body = b"ok\n"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):  # silence per-request logging
+        pass
+
+
+def start_health_server():
+    port = int(os.environ.get("PORT", "10000"))
+    server = HTTPServer(("0.0.0.0", port), _Health)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    print(f"Health endpoint listening on :{port}")
+
+
+def run_loop() -> int:
+    """Persistent long-polling mode for Render/Railway/containers."""
+    start_health_server()
+    cookies = cookies_file()
+    offset = None
+    print("Long-polling Telegram...")
+    while True:
+        try:
+            params = {"timeout": 50, "limit": 100, "allowed_updates": '["message"]'}
+            if offset is not None:
+                params["offset"] = offset
+            updates = tg("getUpdates", **params)
+        except Exception as exc:  # network blip / Telegram hiccup: back off, retry
+            print(f"getUpdates error, retrying in 5s: {exc}", file=sys.stderr)
+            time.sleep(5)
+            continue
+        if updates:
+            offset = updates[-1]["update_id"] + 1
+            process_updates(updates, cookies)
+
+
+def main() -> int:
+    if not BOT_TOKEN:
+        print("TELEGRAM_BOT_TOKEN is not set", file=sys.stderr)
+        return 1
+    if "--loop" in sys.argv:
+        return run_loop()
+    return run_once()
 
 
 if __name__ == "__main__":

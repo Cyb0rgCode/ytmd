@@ -1,0 +1,68 @@
+name: Deploy to Hugging Face Space
+
+# Pushes the bot to a Hugging Face Docker Space, where it long-polls
+# Telegram 24/7 and replies within seconds.
+#
+# One-time setup (see README):
+#   - secret   HF_TOKEN  : Hugging Face access token with "write" scope
+#   - variable HF_SPACE  : Space id, e.g. "your-hf-username/ytmd-bot"
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "bot/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/deploy-hf.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hf
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: vars.HF_SPACE != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble Space contents
+        run: |
+          mkdir -p /tmp/space
+          cp -r bot requirements.txt Dockerfile /tmp/space/
+          # Spaces read their configuration from README.md frontmatter.
+          cat > /tmp/space/README.md <<'EOF'
+          ---
+          title: ytmd bot
+          emoji: 🎵
+          colorFrom: red
+          colorTo: gray
+          sdk: docker
+          app_port: 7860
+          pinned: false
+          ---
+
+          # ytmd — Telegram YouTube Music downloader bot
+
+          Deployed automatically from GitHub. Set the `TELEGRAM_BOT_TOKEN`
+          secret in this Space's settings.
+          EOF
+
+      - name: Push to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          cd /tmp/space
+          git init -q -b main
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy from GitHub ${GITHUB_SHA::7}"
+          git push -q --force "https://oauth:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" main

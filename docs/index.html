@@ -49,7 +49,7 @@
 </head>
 <body>
 <main>
-  <span class="pill">● running on GitHub Actions</span>
+  <span class="pill">● online — instant replies</span>
   <h1>ytmd<span class="dot">.</span></h1>
   <p class="tag">A Telegram bot that turns YouTube&nbsp;Music links into MP3s — hosted entirely on GitHub, no server required.</p>
 
@@ -58,13 +58,13 @@
     <ol>
       <li>Open the bot in Telegram and press <code>Start</code>.</li>
       <li>Paste a link, e.g. <code>https://music.youtube.com/watch?v=…</code></li>
-      <li>Wait a moment — the bot replies with the track as an MP3 (192&nbsp;kbps, tagged, with cover art).</li>
+      <li>The bot replies with the track as an MP3 (192&nbsp;kbps, tagged, with cover art) — usually within seconds.</li>
     </ol>
   </div>
 
   <div class="card">
-    <h2>Why replies take a few minutes</h2>
-    <p>There is no always-on server. A GitHub Actions workflow wakes up every ~5&nbsp;minutes, collects the links sent since the last run, downloads them with <code>yt-dlp</code>, and uploads the audio back to your chat.</p>
+    <h2>How it works</h2>
+    <p>The bot long-polls Telegram from a free Hugging Face Space and downloads tracks with <code>yt-dlp</code> + ffmpeg. A GitHub Actions cron pings it every 5&nbsp;minutes so it never sleeps — and doubles as a fallback poller if the Space is down.</p>
   </div>
 
   <div class="card">

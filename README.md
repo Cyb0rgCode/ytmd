@@ -1,17 +1,22 @@
 # ytmd — Telegram YouTube Music Downloader
 
 A Telegram bot that converts YouTube Music (and regular YouTube) links into
-MP3s, running **entirely on GitHub** — no server needed.
+MP3s — free, no server to rent.
 
-- **Bot runtime:** a GitHub Actions workflow wakes up every ~5 minutes, polls
-  Telegram for new messages, downloads any YouTube links with
-  [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) + ffmpeg, and sends the audio
-  back to the chat as a tagged 192 kbps MP3 with cover art.
-- **Landing page:** `docs/` is published with GitHub Pages.
+Two run modes, same code:
+
+| Mode | Where it runs | Reply speed | Setup |
+|---|---|---|---|
+| **Instant** (recommended) | Hugging Face Space (free Docker container, long-polling 24/7) | seconds | steps 1–2 + "Instant mode" below |
+| **Fallback** | GitHub Actions cron poller | ~5–10 min | steps 1–3 only |
+
+The bot downloads links with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) +
+ffmpeg and sends back a tagged 192 kbps MP3 with cover art. `docs/` is
+published with GitHub Pages as a landing page.
 
 > GitHub Pages itself can only host static files — it cannot run a bot.
-> That's why the bot logic runs in GitHub Actions and Pages just hosts the
-> info page.
+> That's why the bot logic runs in a container / GitHub Actions and Pages
+> just hosts the info page.
 
 ## Setup (one time)
 
@@ -36,11 +41,51 @@ MP3s, running **entirely on GitHub** — no server needed.
 5. **Use it** — open your bot in Telegram, press **Start**, and paste a link
    like `https://music.youtube.com/watch?v=dQw4w9WgXcQ`.
 
+## Instant mode (replies in seconds) — Hugging Face Space
+
+The GitHub cron poller above works with zero extra accounts, but replies take
+~5–10 minutes. For instant replies, run the same bot 24/7 in a free
+Hugging Face Docker Space:
+
+1. **Create a Hugging Face account** at [huggingface.co](https://huggingface.co)
+   (free, no credit card).
+
+2. **Create the Space** — [New Space](https://huggingface.co/new-space):
+   - Space name: `ytmd-bot` (anything works)
+   - SDK: **Docker** → **Blank**
+   - Hardware: **CPU basic (free)**
+   - Visibility: **Private** (recommended)
+
+3. **Add the bot token to the Space** — in the Space's
+   **Settings → Variables and secrets**, add a **secret** named
+   `TELEGRAM_BOT_TOKEN` with your BotFather token.
+
+4. **Connect auto-deploy from this repo:**
+   - On Hugging Face, create an access token with **Write** permission
+     ([Settings → Access Tokens](https://huggingface.co/settings/tokens)).
+   - In this GitHub repo: **Settings → Secrets and variables → Actions**
+     - New **secret**: `HF_TOKEN` = the Hugging Face token
+     - New **variable**: `HF_SPACE` = `your-hf-username/ytmd-bot`
+   - Run the **Deploy to Hugging Face Space** workflow from the Actions tab
+     (it also re-deploys automatically whenever the bot code changes).
+
+5. **Keep it awake + avoid double replies** — free Spaces pause after 48h
+   without traffic, so add one more repository **variable**:
+   - `KEEP_ALIVE_URL` = the Space's direct URL, shown in the Space's
+     **Embed this Space** dialog (looks like
+     `https://your-hf-username-ytmd-bot.hf.space`).
+
+   Setting this variable also automatically switches the 5-minute GitHub
+   workflow from "poll Telegram" to "ping the Space", so the two runtimes
+   never compete for the same messages.
+
+That's it — the bot now answers within seconds.
+
 ## Notes & limits
 
-- **Latency:** replies take up to ~5–10 minutes because GitHub cron schedules
-  are best-effort. For an instant test, trigger the workflow manually from
-  the Actions tab.
+- **Latency:** instant mode replies in seconds. Fallback (Actions-only) mode
+  takes up to ~5–10 minutes because GitHub cron schedules are best-effort;
+  for a quick test, trigger the workflow manually from the Actions tab.
 - **File size:** Telegram bots can upload at most 50 MB per file.
 - **Playlists** are not expanded — only the single linked track is downloaded.
 - **YouTube bot checks:** GitHub's datacenter IPs occasionally get blocked by
@@ -54,9 +99,11 @@ MP3s, running **entirely on GitHub** — no server needed.
 ## Repo layout
 
 ```
-bot/bot.py                  # poll Telegram → yt-dlp → send MP3
-.github/workflows/bot.yml   # cron runner (every 5 min + manual)
-.github/workflows/pages.yml # GitHub Pages deploy of docs/
-docs/index.html             # landing page
-requirements.txt            # yt-dlp, requests, mutagen
+bot/bot.py                       # Telegram → yt-dlp → MP3 (one-shot + --loop modes)
+Dockerfile                       # container for instant mode (HF Space)
+.github/workflows/bot.yml        # cron: poll Telegram, or keep-alive ping
+.github/workflows/deploy-hf.yml  # auto-deploy bot to the HF Space
+.github/workflows/pages.yml      # GitHub Pages deploy of docs/
+docs/index.html                  # landing page
+requirements.txt                 # yt-dlp, requests, mutagen
 ```

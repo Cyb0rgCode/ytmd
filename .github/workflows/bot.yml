@@ -14,7 +14,10 @@ permissions:
   contents: read
 
 jobs:
+  # Fallback mode: poll Telegram from Actions (replies within ~5 min).
+  # Runs only while the KEEP_ALIVE_URL repository variable is unset.
   poll:
+    if: vars.KEEP_ALIVE_URL == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,3 +38,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           YTDLP_COOKIES: ${{ secrets.YTDLP_COOKIES }}
         run: python bot/bot.py
+
+  # Instant mode: the bot long-polls 24/7 in a Hugging Face Space
+  # (see .github/workflows/deploy-hf.yml). Free Spaces pause after 48h
+  # without traffic, so this ping keeps it awake forever. Set the
+  # KEEP_ALIVE_URL repository variable to the Space's direct URL
+  # (https://<owner>-<space>.hf.space) to enable it.
+  keepalive:
+    if: vars.KEEP_ALIVE_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping bot health endpoint
+        run: curl -fsS --max-time 30 "${{ vars.KEEP_ALIVE_URL }}" && echo "bot is awake"
