@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ytmd — Telegram YouTube Music Downloader</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --fg: #16181d; --muted: #5b6472;
+    --card: #ffffff; --accent: #e5443b; --border: #e2e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101216; --fg: #e8eaee; --muted: #9aa3b0;
+      --card: #181b21; --accent: #ff6259; --border: #2a2e36;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 3rem 1rem;
+  }
+  main { max-width: 42rem; width: 100%; }
+  h1 { font-size: 2rem; letter-spacing: -0.02em; }
+  h1 .dot { color: var(--accent); }
+  p.tag { color: var(--muted); margin: .4rem 0 2rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+  }
+  .card h2 { font-size: 1.05rem; margin-bottom: .5rem; }
+  ol { padding-left: 1.25rem; }
+  li { margin: .35rem 0; }
+  code {
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+    border-radius: 5px; padding: .1em .4em; font-size: .9em;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+  }
+  .pill {
+    display: inline-block; font-size: .8rem; font-weight: 600;
+    color: var(--accent); border: 1px solid var(--accent);
+    border-radius: 999px; padding: .1rem .7rem; margin-bottom: 1rem;
+  }
+  footer { color: var(--muted); font-size: .85rem; margin-top: 2rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <span class="pill">● running on GitHub Actions</span>
+  <h1>ytmd<span class="dot">.</span></h1>
+  <p class="tag">A Telegram bot that turns YouTube&nbsp;Music links into MP3s — hosted entirely on GitHub, no server required.</p>
+
+  <div class="card">
+    <h2>How to use</h2>
+    <ol>
+      <li>Open the bot in Telegram and press <code>Start</code>.</li>
+      <li>Paste a link, e.g. <code>https://music.youtube.com/watch?v=…</code></li>
+      <li>Wait a moment — the bot replies with the track as an MP3 (192&nbsp;kbps, tagged, with cover art).</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Why replies take a few minutes</h2>
+    <p>There is no always-on server. A GitHub Actions workflow wakes up every ~5&nbsp;minutes, collects the links sent since the last run, downloads them with <code>yt-dlp</code>, and uploads the audio back to your chat.</p>
+  </div>
+
+  <div class="card">
+    <h2>Limits</h2>
+    <ol>
+      <li>Max 50&nbsp;MB per file (Telegram bot upload limit).</li>
+      <li>Single tracks only — playlists are not expanded.</li>
+      <li>Personal use: only download content you have the rights to.</li>
+    </ol>
+  </div>
+
+  <footer>Source &amp; setup instructions: see the <a href="https://github.com/Cyb0rgCode/ytmd">GitHub repository</a>.</footer>
+</main>
+</body>
+</html>
