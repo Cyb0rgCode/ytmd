@@ -11,7 +11,7 @@ on:
   push:
     branches: [main, master]
     paths:
-      - "bot/**"
+      - "bot.py"
       - "requirements.txt"
       - "Dockerfile"
       - ".github/workflows/deploy-hf.yml"
@@ -35,7 +35,7 @@ jobs:
       - name: Assemble Space contents
         run: |
           mkdir -p /tmp/space
-          cp -r bot requirements.txt Dockerfile /tmp/space/
+          cp bot.py requirements.txt Dockerfile /tmp/space/
           # Spaces read their configuration from README.md frontmatter.
           cat > /tmp/space/README.md <<'EOF'
           ---

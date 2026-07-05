@@ -37,7 +37,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           YTDLP_COOKIES: ${{ secrets.YTDLP_COOKIES }}
-        run: python bot/bot.py
+        run: python bot.py
 
   # Instant mode: the bot long-polls 24/7 in a Hugging Face Space
   # (see .github/workflows/deploy-hf.yml). Free Spaces pause after 48h

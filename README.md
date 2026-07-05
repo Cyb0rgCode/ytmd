@@ -3,12 +3,13 @@
 A Telegram bot that converts YouTube Music (and regular YouTube) links into
 MP3s — free, no server to rent.
 
-Two run modes, same code:
+Three ways to run the same code — pick one:
 
-| Mode | Where it runs | Reply speed | Setup |
+| Mode | Where it runs | Reply speed | Needs |
 |---|---|---|---|
-| **Instant** (recommended) | Hugging Face Space (free Docker container, long-polling 24/7) | seconds | steps 1–2 + "Instant mode" below |
-| **Fallback** | GitHub Actions cron poller | ~5–10 min | steps 1–3 only |
+| **Instant** (recommended) | Hugging Face Space — free Docker container, long-polling 24/7 | seconds | free HF account, 3-file upload |
+| **Fallback** | GitHub Actions cron poller | ~5–10 min | nothing but this repo |
+| **Local** | your own machine / Docker | seconds (while it's on) | Python or Docker |
 
 The bot downloads links with [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) +
 ffmpeg and sends back a tagged 192 kbps MP3 with cover art. `docs/` is
@@ -18,68 +19,75 @@ published with GitHub Pages as a landing page.
 > That's why the bot logic runs in a container / GitHub Actions and Pages
 > just hosts the info page.
 
-## Setup (one time)
+## Step 0 (all modes): create your bot
 
-1. **Create the bot** — talk to [@BotFather](https://t.me/BotFather) in
-   Telegram, send `/newbot`, and copy the token it gives you
-   (looks like `123456789:AAF...`).
-
-2. **Add the token as a secret** — in this repo go to
-   **Settings → Secrets and variables → Actions → New repository secret** and
-   create:
-   - Name: `TELEGRAM_BOT_TOKEN`
-   - Value: the token from BotFather
-
-3. **Enable the workflows** — go to the **Actions** tab and enable workflows
-   if GitHub asks. The `Telegram bot` workflow then runs automatically every
-   5 minutes. You can also trigger it manually with **Run workflow** to test.
-
-4. **Enable GitHub Pages** — in **Settings → Pages**, set **Source** to
-   **GitHub Actions**. The `Deploy GitHub Pages` workflow publishes `docs/`
-   whenever it changes on the default branch (or run it manually once).
-
-5. **Use it** — open your bot in Telegram, press **Start**, and paste a link
-   like `https://music.youtube.com/watch?v=dQw4w9WgXcQ`.
+Talk to [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`,
+and copy the token it gives you (looks like `123456789:AAF...`).
 
 ## Instant mode (replies in seconds) — Hugging Face Space
 
-The GitHub cron poller above works with zero extra accounts, but replies take
-~5–10 minutes. For instant replies, run the same bot 24/7 in a free
-Hugging Face Docker Space:
+Run the same bot 24/7 in a free Hugging Face Docker Space (no credit card).
+The whole thing is a drag-and-drop of 3 files:
 
-1. **Create a Hugging Face account** at [huggingface.co](https://huggingface.co)
-   (free, no credit card).
-
-2. **Create the Space** — [New Space](https://huggingface.co/new-space):
+1. **Create a free account** at [huggingface.co](https://huggingface.co),
+   then create a Space at [huggingface.co/new-space](https://huggingface.co/new-space):
    - Space name: `ytmd-bot` (anything works)
    - SDK: **Docker** → **Blank**
    - Hardware: **CPU basic (free)**
    - Visibility: **Private** (recommended)
 
-3. **Add the bot token to the Space** — in the Space's
-   **Settings → Variables and secrets**, add a **secret** named
-   `TELEGRAM_BOT_TOKEN` with your BotFather token.
+2. **Upload the bot** — on the Space page open **Files → + Add file →
+   Upload files**, and drag in these 3 files from this repo:
+   `bot.py`, `requirements.txt`, `Dockerfile`. Commit.
 
-4. **Connect auto-deploy from this repo:**
-   - On Hugging Face, create an access token with **Write** permission
-     ([Settings → Access Tokens](https://huggingface.co/settings/tokens)).
-   - In this GitHub repo: **Settings → Secrets and variables → Actions**
-     - New **secret**: `HF_TOKEN` = the Hugging Face token
-     - New **variable**: `HF_SPACE` = `your-hf-username/ytmd-bot`
-   - Run the **Deploy to Hugging Face Space** workflow from the Actions tab
-     (it also re-deploys automatically whenever the bot code changes).
+3. **Add your token** — in the Space's **Settings → Variables and secrets**,
+   add a **secret** named `TELEGRAM_BOT_TOKEN` with your BotFather token.
+   The Space rebuilds and the bot is live — message it and it answers in
+   seconds.
 
-5. **Keep it awake + avoid double replies** — free Spaces pause after 48h
-   without traffic, so add one more repository **variable**:
+4. **Keep it awake** (recommended) — free Spaces pause after 48 hours
+   without web traffic. In this GitHub repo add a repository **variable**
+   (Settings → Secrets and variables → Actions → Variables):
    - `KEEP_ALIVE_URL` = the Space's direct URL, shown in the Space's
      **Embed this Space** dialog (looks like
      `https://your-hf-username-ytmd-bot.hf.space`).
 
-   Setting this variable also automatically switches the 5-minute GitHub
-   workflow from "poll Telegram" to "ping the Space", so the two runtimes
-   never compete for the same messages.
+   The 5-minute GitHub workflow then pings it forever. Alternatively, any
+   free uptime monitor (e.g. UptimeRobot) pointed at that URL works too.
 
-That's it — the bot now answers within seconds.
+> ⚠️ Run **one** consumer at a time: if you use instant mode, either set
+> `KEEP_ALIVE_URL` (which switches the GitHub cron from polling to pinging
+> automatically) or don't add the `TELEGRAM_BOT_TOKEN` secret to GitHub at
+> all. Two pollers on the same token steal each other's messages.
+
+<details>
+<summary><b>Optional: auto-deploy from GitHub instead of uploading manually</b></summary>
+
+If you'd rather have GitHub push the bot to the Space on every code change:
+create a Hugging Face access token with **Write** permission
+([Settings → Access Tokens](https://huggingface.co/settings/tokens)), then in
+this repo add secret `HF_TOKEN` = that token and variable `HF_SPACE` =
+`your-hf-username/ytmd-bot`, and run the **Deploy to Hugging Face Space**
+workflow once from the Actions tab.
+</details>
+
+## Fallback mode — GitHub Actions only (no extra accounts)
+
+Skip Hugging Face entirely and let the 5-minute cron poller answer
+(~5–10 min per reply):
+
+1. In this repo: **Settings → Secrets and variables → Actions → New
+   repository secret** → name `TELEGRAM_BOT_TOKEN`, value = your BotFather
+   token.
+2. Go to the **Actions** tab and enable workflows if GitHub asks. The
+   `Telegram bot` workflow then runs every 5 minutes; trigger it manually
+   with **Run workflow** for an instant test.
+
+## GitHub Pages landing page (optional)
+
+In **Settings → Pages**, set **Source** to **GitHub Actions**. The
+`Deploy GitHub Pages` workflow publishes `docs/` whenever it changes on the
+default branch (or run it manually once).
 
 ## Notes & limits
 
@@ -99,11 +107,26 @@ That's it — the bot now answers within seconds.
 ## Repo layout
 
 ```
-bot/bot.py                       # Telegram → yt-dlp → MP3 (one-shot + --loop modes)
+bot.py                           # Telegram → yt-dlp → MP3 (one-shot + --loop modes)
 Dockerfile                       # container for instant mode (HF Space)
 .github/workflows/bot.yml        # cron: poll Telegram, or keep-alive ping
-.github/workflows/deploy-hf.yml  # auto-deploy bot to the HF Space
+.github/workflows/deploy-hf.yml  # optional auto-deploy to the HF Space
 .github/workflows/pages.yml      # GitHub Pages deploy of docs/
 docs/index.html                  # landing page
 requirements.txt                 # yt-dlp, requests, mutagen
+```
+
+## Run it on your own machine (zero accounts)
+
+Instant replies while your computer is on — nothing to sign up for:
+
+```bash
+pip install -r requirements.txt   # plus ffmpeg: apt/brew install ffmpeg
+TELEGRAM_BOT_TOKEN=123:ABC... python bot.py --loop
+```
+
+or with Docker:
+
+```bash
+docker build -t ytmd . && docker run -e TELEGRAM_BOT_TOKEN=123:ABC... ytmd
 ```
