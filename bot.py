@@ -152,6 +152,10 @@ UNAVAILABLE_RE = re.compile(
     r"video unavailable|not available|isn.?t available", re.IGNORECASE
 )
 
+BOT_CHECK_RE = re.compile(
+    r"sign in to confirm|confirm you.{0,3}re not a bot", re.IGNORECASE
+)
+
 
 def _video_id(url: str) -> str | None:
     m = re.search(r"(?:v=|youtu\.be/|/shorts/)([\w-]{11})", url)
@@ -205,52 +209,65 @@ def _music_search_id(query: str, exclude: str | None) -> str | None:
     return None
 
 
+def _client_opts(opts: dict, *clients: str) -> dict:
+    return {**opts, "extractor_args": {"youtube": {"player_client": list(clients)}}}
+
+
 def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, dict]:
     """Download a single track. Returns (filepath, info).
 
-    YouTube Music art-track IDs are region/distributor-dependent: an ID
-    that plays for the user can be "Video unavailable" from the server's
-    region (yt-dlp #14066). Fallback chain: direct download -> retry with
-    the YouTube Music player client -> resolve the track via YouTube
-    Music's API (ytmusicapi): fetch its title/artist, search songs-only,
-    and download the matching music.youtube.com track.
+    Two distinct YouTube failure modes need different handling:
+
+    1. Region-locked IDs: YouTube Music art-track IDs are
+       region/distributor-dependent — an ID that plays for the user can be
+       "Video unavailable" from the server's region (yt-dlp #14066).
+       Fallback: retry with the YouTube Music player client, then resolve
+       the track via YouTube Music's API (ytmusicapi) — title/artist
+       lookup, songs-only search — and download the matching track.
+    2. Bot checks ("Sign in to confirm you're not a bot"): YouTube
+       challenges cloud/datacenter IPs regardless of which track it is.
+       Retrying with cookie-compatible player clients sometimes helps;
+       the reliable fix is a YTDLP_COOKIES secret.
     """
     opts, have_ffmpeg = _ydl_opts(workdir, cookies)
 
     attempts = [(url, opts)]
     if "music.youtube.com" in url:
-        attempts.append(
-            (
-                url,
-                {
-                    **opts,
-                    "extractor_args": {"youtube": {"player_client": ["web_music"]}},
-                },
-            )
-        )
+        attempts.append((url, _client_opts(opts, "web_music")))
+        attempts.append((url, _client_opts(opts, "android", "web", "mweb")))
 
     last_exc: Exception | None = None
+    last_kind: str | None = None  # 'unavailable' | 'bot_check'
     for target, attempt_opts in attempts:
         try:
             return _extract(target, attempt_opts, have_ffmpeg)
         except yt_dlp.utils.DownloadError as exc:
-            if not UNAVAILABLE_RE.search(str(exc)):
+            text = str(exc)
+            if BOT_CHECK_RE.search(text):
+                last_exc, last_kind = exc, "bot_check"
+            elif UNAVAILABLE_RE.search(text):
+                last_exc, last_kind = exc, "unavailable"
+            else:
                 raise
-            last_exc = exc
+
+    if last_kind == "bot_check":
+        raise RuntimeError(
+            "YouTube is challenging this server as a bot (a well-known "
+            "issue for cloud-hosted downloaders, not specific to this "
+            "track). Fix: add a YTDLP_COOKIES secret with your browser's "
+            "youtube.com cookies — see the README's 'YouTube bot checks' "
+            "section."
+        ) from last_exc
 
     video_id = _video_id(url)
     music_query = _music_track_query(video_id) if video_id else None
     query = music_query or (_oembed_query(video_id) if video_id else None)
     alt_id = _music_search_id(query, exclude=video_id) if query else None
     if alt_id:
-        music_opts = {
-            **opts,
-            "extractor_args": {"youtube": {"player_client": ["web_music"]}},
-        }
         try:
             return _extract(
                 f"https://music.youtube.com/watch?v={alt_id}",
-                music_opts,
+                _client_opts(opts, "web_music"),
                 have_ffmpeg,
             )
         except yt_dlp.utils.DownloadError:

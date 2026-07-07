@@ -109,12 +109,17 @@ default branch (or run it manually once).
   — title/artist lookup plus a songs-only search — and downloads the
   matching music.youtube.com track. It never substitutes regular YouTube
   videos.
-- **YouTube bot checks:** datacenter IPs (Vercel, GitHub, etc.) occasionally
-  get blocked by YouTube ("Sign in to confirm you're not a bot"). If
-  downloads start failing with that error, export your browser cookies for
-  youtube.com in Netscape `cookies.txt` format and add the contents as an
-  environment variable / secret named `YTDLP_COOKIES` — the bot picks it up
-  automatically.
+- **YouTube bot checks:** datacenter IPs (Vercel, GitHub, etc.) commonly get
+  challenged by YouTube ("Sign in to confirm you're not a bot") — this is a
+  well-known issue for any cloud-hosted downloader, not a bug in this bot,
+  and no player-client trick reliably avoids it. The bot already retries
+  with a couple of alternate player clients, but the real fix is cookies:
+  1. Install a "cookies.txt" export extension in a browser where you're
+     logged into YouTube (e.g. "Get cookies.txt LOCALLY" for Chrome/Firefox).
+  2. Visit youtube.com, export cookies for that domain in Netscape format.
+  3. Add the file's contents as an environment variable / secret named
+     `YTDLP_COOKIES` (Vercel: Project → Settings → Environment Variables).
+  The bot picks it up automatically on the next request.
 - **Legal:** download only content you have the rights to. This tool is for
   personal use.
 
