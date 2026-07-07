@@ -19,6 +19,9 @@ Optional environment:
   PORT                - health endpoint port in --loop mode (default 10000)
   YTDLP_COOKIES       - contents of a Netscape cookies.txt; helps when
                         YouTube blocks datacenter IPs with a bot check.
+  YTDLP_PROXY         - proxy URL (e.g. http://user:pass@host:port or
+                        socks5://host:port) passed to yt-dlp; an
+                        alternative to cookies for the same bot check.
 """
 
 import hashlib
@@ -147,6 +150,9 @@ def _ydl_opts(workdir: str, cookies: str | None) -> tuple[dict, bool]:
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     if cookies:
         opts["cookiefile"] = cookies
+    proxy = os.environ.get("YTDLP_PROXY", "").strip()
+    if proxy:
+        opts["proxy"] = proxy
     return opts, have_ffmpeg
 
 
@@ -272,9 +278,9 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
         raise RuntimeError(
             "YouTube is challenging this server as a bot (a well-known "
             "issue for cloud-hosted downloaders, not specific to this "
-            "track). Fix: add a YTDLP_COOKIES secret with your browser's "
-            "youtube.com cookies — see the README's 'YouTube bot checks' "
-            "section."
+            "track). Fix: add a YTDLP_COOKIES secret (needs a desktop "
+            "browser once) or a YTDLP_PROXY secret (works from a phone, "
+            "costs money) — see the README's 'YouTube bot checks' section."
         ) from last_exc
 
     video_id = _video_id(url)

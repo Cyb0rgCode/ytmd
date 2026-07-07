@@ -116,14 +116,26 @@ default branch (or run it manually once).
 - **YouTube bot checks:** datacenter IPs (Vercel, GitHub, etc.) commonly get
   challenged by YouTube ("Sign in to confirm you're not a bot") — this is a
   well-known issue for any cloud-hosted downloader, not a bug in this bot,
-  and no player-client trick reliably avoids it. The bot already retries
-  with a couple of alternate player clients, but the real fix is cookies:
-  1. Install a "cookies.txt" export extension in a browser where you're
-     logged into YouTube (e.g. "Get cookies.txt LOCALLY" for Chrome/Firefox).
-  2. Visit youtube.com, export cookies for that domain in Netscape format.
-  3. Add the file's contents as an environment variable / secret named
-     `YTDLP_COOKIES` (Vercel: Project → Settings → Environment Variables).
-  The bot picks it up automatically on the next request.
+  and no player-client trick reliably avoids it (the bot already retries
+  with a couple of alternate player clients for free). There are two real
+  fixes:
+  - **Cookies** (needs a desktop/laptop browser once): install a
+    "cookies.txt" export extension where you're logged into YouTube (e.g.
+    "Get cookies.txt LOCALLY" for Chrome/Firefox — not the malware-flagged
+    "Get cookies.txt" without "LOCALLY"), export cookies for youtube.com in
+    Netscape format, and add the file's contents as an environment
+    variable / secret named `YTDLP_COOKIES`. Not available from iOS —
+    Safari/Chrome/Firefox on iPhone can't run this kind of extension.
+  - **A proxy** (works entirely from a phone, costs money): sign up for
+    any residential/mobile proxy provider, then set an environment
+    variable / secret named `YTDLP_PROXY` to the proxy URL, e.g.
+    `http://user:pass@host:port` or `socks5://host:port`. This routes
+    downloads through a non-datacenter IP instead of authenticating with
+    a session, so YouTube doesn't challenge the request in the first
+    place. Both `YTDLP_COOKIES` and `YTDLP_PROXY` can be set at the same
+    time if you want.
+  Either way, the bot picks it up automatically on the next request
+  (Vercel: redeploy after adding an environment variable).
 - **Legal:** download only content you have the rights to. This tool is for
   personal use.
 
