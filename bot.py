@@ -89,12 +89,12 @@ def cookies_file() -> str | None:
     return path
 
 
-def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, dict]:
-    """Download a single track. Returns (filepath, info).
+def _ydl_opts(workdir: str, cookies: str | None) -> tuple[dict, bool]:
+    """Base yt-dlp options.
 
-    With ffmpeg available: converted to tagged 192 kbps MP3 with cover art.
+    With ffmpeg available: convert to tagged 192 kbps MP3 with cover art.
     Without ffmpeg (serverless hosts like Vercel): YouTube's native AAC
-    (.m4a) is sent as-is — same source quality, no transcode.
+    (.m4a) is kept as-is — same source quality, no transcode.
     """
     have_ffmpeg = shutil.which("ffmpeg") is not None
     opts = {
@@ -123,16 +123,102 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     if cookies:
         opts["cookiefile"] = cookies
+    return opts, have_ffmpeg
 
+
+def _extract(target: str, opts: dict, have_ffmpeg: bool) -> tuple[str, dict]:
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(target, download=True)
+        if info.get("entries") is not None:  # ytsearch result wrapper
+            entries = [e for e in info["entries"] if e]
+            if not entries:
+                raise yt_dlp.utils.DownloadError("no search results")
+            info = entries[0]
         path = ydl.prepare_filename(info)
     if have_ffmpeg:
         path = os.path.splitext(path)[0] + ".mp3"
-
     if not os.path.exists(path):
         raise RuntimeError("download finished but output file is missing")
     return path, info
+
+
+UNAVAILABLE_RE = re.compile(
+    r"video unavailable|not available|isn.?t available", re.IGNORECASE
+)
+
+
+def _video_id(url: str) -> str | None:
+    m = re.search(r"(?:v=|youtu\.be/|/shorts/)([\w-]{11})", url)
+    return m.group(1) if m else None
+
+
+def _oembed_query(video_id: str) -> str | None:
+    """Title/artist of a video via oEmbed, which works across regions even
+    when playback of that exact ID does not."""
+    try:
+        resp = requests.get(
+            "https://www.youtube.com/oembed",
+            params={
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "format": "json",
+            },
+            timeout=15,
+        )
+        if resp.ok:
+            data = resp.json()
+            author = (data.get("author_name") or "").removesuffix(" - Topic")
+            query = f"{author} {data.get('title') or ''}".strip()
+            return query or None
+    except (requests.RequestException, ValueError):
+        pass
+    return None
+
+
+def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, dict]:
+    """Download a single track. Returns (filepath, info).
+
+    YouTube Music art-track IDs are region/distributor-dependent: an ID
+    that plays for the user can be "Video unavailable" from the server's
+    region (yt-dlp #14066). Fallback chain: direct download -> retry with
+    the YouTube Music player client -> find the same track by title via
+    oEmbed and download the top search match.
+    """
+    opts, have_ffmpeg = _ydl_opts(workdir, cookies)
+
+    attempts = [(url, opts)]
+    if "music.youtube.com" in url:
+        attempts.append(
+            (
+                url,
+                {
+                    **opts,
+                    "extractor_args": {"youtube": {"player_client": ["web_music"]}},
+                },
+            )
+        )
+
+    last_exc: Exception | None = None
+    for target, attempt_opts in attempts:
+        try:
+            return _extract(target, attempt_opts, have_ffmpeg)
+        except yt_dlp.utils.DownloadError as exc:
+            if not UNAVAILABLE_RE.search(str(exc)):
+                raise
+            last_exc = exc
+
+    video_id = _video_id(url)
+    query = _oembed_query(video_id) if video_id else None
+    if query:
+        try:
+            return _extract(f"ytsearch1:{query}", opts, have_ffmpeg)
+        except yt_dlp.utils.DownloadError:
+            pass
+
+    raise RuntimeError(
+        "this track isn't playable from the bot's server region (a YouTube "
+        "Music region-locked ID). Try sending the regular youtube.com link "
+        "for the same song, or add a YTDLP_COOKIES secret (see README)."
+    ) from last_exc
 
 
 AUDIO_MIME = {

@@ -100,6 +100,11 @@ default branch (or run it manually once).
   for a quick test, trigger the workflow manually from the Actions tab.
 - **File size:** Telegram bots can upload at most 50 MB per file.
 - **Playlists** are not expanded — only the single linked track is downloaded.
+- **Region-locked YouTube Music IDs:** some music.youtube.com track IDs only
+  play in certain countries (auto-generated "art tracks" get different IDs
+  per distributor/region). The bot handles this automatically: it retries
+  with the YouTube Music player client, then falls back to finding the same
+  track by title and downloading the closest match.
 - **YouTube bot checks:** datacenter IPs (Vercel, GitHub, etc.) occasionally
   get blocked by YouTube ("Sign in to confirm you're not a bot"). If
   downloads start failing with that error, export your browser cookies for
