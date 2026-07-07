@@ -2,7 +2,11 @@
 
 A Telegram bot that converts YouTube Music (`music.youtube.com`) links into
 audio files — free, no server to rent. Regular YouTube links are rejected;
-only YouTube Music links are accepted.
+only YouTube Music links are accepted. Handles every real share variant
+the app produces (default share, timestamp share, `&list=`/`&si=`
+combinations) and tolerates how links actually look once pasted into a
+chat — missing `https://`, wrapped in `(parentheses)` or a markdown
+`[link](...)`, with trailing punctuation from the sentence around it.
 
 Three ways to run the same code — pick one:
 

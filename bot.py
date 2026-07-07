@@ -43,16 +43,34 @@ API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 # Telegram bots can upload files up to 50 MB.
 MAX_UPLOAD_BYTES = 49 * 1024 * 1024
 
+# Characters that stop a match: whitespace, and punctuation that's almost
+# always sentence/markdown decoration around a pasted link rather than part
+# of it (trailing '.', a closing ')' from "(link)", a closing bracket from
+# "[text](link)", etc.) — without this, those chars get vacuumed into the
+# URL and corrupt the request.
+_STOP_CHARS = r"\s\)\]\}>,;:!.\"'"
+
+# https://music.youtube.com/watch?v=ID[&si=...][&t=42][&list=...] is the
+# only share format the app produces (default share, timestamp share,
+# sharing from within an album/playlist) — no youtu.be-style short link
+# exists for YouTube Music. Scheme and "www." are optional since share
+# sheets / chat apps often strip or never had them.
 YT_MUSIC_URL_RE = re.compile(
-    r"https?://music\.youtube\.com/watch\?[^\s]*v=[\w-]{11}[^\s]*",
+    rf"(?:https?://)?(?:www\.)?music\.youtube\.com/watch\?"
+    rf"[^{_STOP_CHARS}]*v=[\w-]{{11}}[^{_STOP_CHARS}]*",
     re.IGNORECASE,
 )
 
 # Recognized only to explain the rejection — never downloaded.
 OTHER_YOUTUBE_URL_RE = re.compile(
-    r"https?://(?:www\.|m\.)?(?:youtube\.com/|youtu\.be/)\S+",
+    rf"(?:https?://)?(?:www\.|m\.)?(?:youtube\.com/|youtu\.be/)[^{_STOP_CHARS}]+",
     re.IGNORECASE,
 )
+
+
+def _normalize_url(url: str) -> str:
+    """Add a scheme back if the pasted link was missing one."""
+    return url if url.lower().startswith("http") else f"https://{url}"
 
 START_TEXT = (
     "Hi! Send me a YouTube Music link and I'll reply with the audio file.\n\n"
@@ -362,7 +380,7 @@ def handle_message(msg: dict, cookies: str | None):
         send_text(chat_id, f"Running commit: {running_commit()}")
         return
 
-    urls = YT_MUSIC_URL_RE.findall(text)
+    urls = [_normalize_url(u) for u in YT_MUSIC_URL_RE.findall(text)]
     if not urls:
         if OTHER_YOUTUBE_URL_RE.search(text):
             send_text(
