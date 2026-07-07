@@ -1,0 +1,13 @@
+[project]
+name = "ytmd"
+version = "1.0.0"
+description = "Telegram bot that turns YouTube Music links into audio files"
+requires-python = ">=3.11"
+dependencies = [
+    "yt-dlp",
+    "requests",
+    "mutagen",
+]
+
+[tool.vercel]
+entrypoint = "app:app"

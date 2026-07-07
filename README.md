@@ -48,8 +48,6 @@ Notes for this mode:
   source quality to the MP3 the other modes produce (serverless has no
   ffmpeg to transcode with). Telegram plays it natively.
 - To switch back to polling later, visit `/api/setup?remove=1`.
-- If a deploy error mentions `maxDuration`, lower it from `300` to `60`
-  in `vercel.json`.
 
 > ⚠️ Run **one** consumer at a time: while the webhook is registered,
 > Telegram rejects polling — so don't add the `TELEGRAM_BOT_TOKEN` secret
@@ -115,9 +113,8 @@ default branch (or run it manually once).
 
 ```
 bot.py                           # core logic: Telegram → yt-dlp → audio reply
-api/webhook.py                   # Vercel: receives Telegram webhook pushes
-api/setup.py                     # Vercel: one-click webhook registration
-vercel.json                      # Vercel function config
+app.py                           # Vercel entrypoint: /api/webhook + /api/setup
+pyproject.toml                   # deps + [tool.vercel] entrypoint
 Dockerfile                       # container hosts (long-polling + ffmpeg/MP3)
 .github/workflows/bot.yml        # cron: poll Telegram, or keep-alive ping
 .github/workflows/deploy-hf.yml  # optional auto-deploy to a HF Space
