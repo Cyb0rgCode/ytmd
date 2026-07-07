@@ -175,7 +175,7 @@ def _oembed_query(video_id: str) -> str | None:
             author = (data.get("author_name") or "").removesuffix(" - Topic")
             query = f"{author} {data.get('title') or ''}".strip()
             return query or None
-    except (requests.RequestException, ValueError):
+    except Exception:  # any network/parsing hiccup: this is a best-effort lookup
         pass
     return None
 
@@ -239,9 +239,8 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
             last_exc = exc
 
     video_id = _video_id(url)
-    query = None
-    if video_id:
-        query = _music_track_query(video_id) or _oembed_query(video_id)
+    music_query = _music_track_query(video_id) if video_id else None
+    query = music_query or (_oembed_query(video_id) if video_id else None)
     alt_id = _music_search_id(query, exclude=video_id) if query else None
     if alt_id:
         music_opts = {
@@ -257,10 +256,15 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
         except yt_dlp.utils.DownloadError:
             pass
 
+    debug = (
+        f"[resolve: query={'ytmusic' if music_query else ('oembed' if query else 'none')}, "
+        f"alt_id={alt_id or 'none'}]"
+    )
     raise RuntimeError(
         "this track isn't playable from the bot's server region (a YouTube "
-        "Music region-locked ID) and the title-search fallback found no "
-        "match. Adding a YTDLP_COOKIES secret (see README) usually fixes it."
+        "Music region-locked ID) and the fallback search found no working "
+        "copy. Adding a YTDLP_COOKIES secret (see README) usually fixes it. "
+        f"{debug}"
     ) from last_exc
 
 
@@ -316,6 +320,18 @@ def webhook_secret() -> str:
     return hashlib.sha256(f"ytmd:{BOT_TOKEN}".encode()).hexdigest()[:32]
 
 
+def running_commit() -> str:
+    """Short commit hash of the code actually running, if the host exposes
+    it (Vercel sets VERCEL_GIT_COMMIT_SHA automatically); else 'unknown'."""
+    sha = (
+        os.environ.get("VERCEL_GIT_COMMIT_SHA")
+        or os.environ.get("RENDER_GIT_COMMIT")
+        or os.environ.get("GITHUB_SHA")
+        or ""
+    )
+    return sha[:7] if sha else "unknown"
+
+
 def handle_message(msg: dict, cookies: str | None):
     chat_id = msg["chat"]["id"]
     message_id = msg.get("message_id")
@@ -323,6 +339,10 @@ def handle_message(msg: dict, cookies: str | None):
 
     if text.strip().startswith("/start") or text.strip().startswith("/help"):
         send_text(chat_id, START_TEXT)
+        return
+
+    if text.strip().startswith("/version"):
+        send_text(chat_id, f"Running commit: {running_commit()}")
         return
 
     urls = YT_MUSIC_URL_RE.findall(text)
