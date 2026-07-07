@@ -64,7 +64,7 @@
 
   <div class="card">
     <h2>How it works</h2>
-    <p>The bot long-polls Telegram from a free container host (Koyeb) and downloads tracks with <code>yt-dlp</code> + ffmpeg. A GitHub Actions cron pings it every 5&nbsp;minutes so it never sleeps — and can act as a fallback poller if the container is down.</p>
+    <p>Telegram pushes each message to a free Vercel serverless function the instant it arrives; the function downloads the track with <code>yt-dlp</code> and sends the audio back in the same request. No always-on server anywhere — and a GitHub Actions cron can take over as a fallback poller.</p>
   </div>
 
   <div class="card">

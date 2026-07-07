@@ -39,10 +39,11 @@ jobs:
           YTDLP_COOKIES: ${{ secrets.YTDLP_COOKIES }}
         run: python bot.py
 
-  # Instant mode: the bot long-polls 24/7 on a free container host
-  # (Koyeb by default — see README "Instant mode"). Free instances sleep
-  # when idle, so this ping keeps the bot awake. Set the KEEP_ALIVE_URL
-  # repository variable to the service's public URL to enable it.
+  # Keep-alive for container hosts (HF Space / Render): free instances
+  # sleep when idle, so this ping keeps the bot awake. Set the
+  # KEEP_ALIVE_URL repository variable to the service's public URL to
+  # enable it. Not needed for Vercel webhook mode — serverless functions
+  # don't sleep in a way that matters.
   keepalive:
     if: vars.KEEP_ALIVE_URL != ''
     runs-on: ubuntu-latest

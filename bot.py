@@ -20,9 +20,11 @@ Optional environment:
                         YouTube blocks datacenter IPs with a bot check.
 """
 
+import hashlib
 import html
 import os
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -48,9 +50,8 @@ YOUTUBE_URL_RE = re.compile(
 
 START_TEXT = (
     "Hi! Send me a YouTube Music (or regular YouTube) link and I'll reply "
-    "with the audio as an MP3.\n\n"
-    "Example:\nhttps://music.youtube.com/watch?v=dQw4w9WgXcQ\n\n"
-    "Note: I run on a schedule, so replies can take a few minutes."
+    "with the audio file.\n\n"
+    "Example:\nhttps://music.youtube.com/watch?v=dQw4w9WgXcQ"
 )
 
 
@@ -89,39 +90,64 @@ def cookies_file() -> str | None:
 
 
 def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, dict]:
-    """Download a single track as MP3. Returns (filepath, info)."""
+    """Download a single track. Returns (filepath, info).
+
+    With ffmpeg available: converted to tagged 192 kbps MP3 with cover art.
+    Without ffmpeg (serverless hosts like Vercel): YouTube's native AAC
+    (.m4a) is sent as-is — same source quality, no transcode.
+    """
+    have_ffmpeg = shutil.which("ffmpeg") is not None
     opts = {
-        "format": "bestaudio/best",
         "outtmpl": os.path.join(workdir, "%(id)s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            },
-            {"key": "FFmpegMetadata"},
-            {"key": "EmbedThumbnail"},
-        ],
-        "writethumbnail": True,
     }
+    if have_ffmpeg:
+        opts.update(
+            {
+                "format": "bestaudio/best",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    },
+                    {"key": "FFmpegMetadata"},
+                    {"key": "EmbedThumbnail"},
+                ],
+                "writethumbnail": True,
+            }
+        )
+    else:
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     if cookies:
         opts["cookiefile"] = cookies
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
+        path = ydl.prepare_filename(info)
+    if have_ffmpeg:
+        path = os.path.splitext(path)[0] + ".mp3"
 
-    path = os.path.join(workdir, f"{info['id']}.mp3")
     if not os.path.exists(path):
         raise RuntimeError("download finished but output file is missing")
     return path, info
 
 
+AUDIO_MIME = {
+    "mp3": "audio/mpeg",
+    "m4a": "audio/mp4",
+    "webm": "audio/webm",
+    "opus": "audio/ogg",
+    "ogg": "audio/ogg",
+}
+
+
 def send_audio(chat_id: int, path: str, info: dict, reply_to: int | None):
     title = info.get("track") or info.get("title") or "audio"
     performer = info.get("artist") or info.get("uploader") or ""
+    ext = os.path.splitext(path)[1].lstrip(".").lower() or "mp3"
     with open(path, "rb") as fh:
         resp = requests.post(
             f"{API}/sendAudio",
@@ -139,12 +165,26 @@ def send_audio(chat_id: int, path: str, info: dict, reply_to: int | None):
                     else {}
                 ),
             },
-            files={"audio": (f"{title}.mp3", fh, "audio/mpeg")},
+            files={
+                "audio": (
+                    f"{title}.{ext}",
+                    fh,
+                    AUDIO_MIME.get(ext, "application/octet-stream"),
+                )
+            },
             timeout=300,
         )
     payload = resp.json()
     if not payload.get("ok"):
         raise RuntimeError(f"sendAudio failed: {payload}")
+
+
+def webhook_secret() -> str:
+    """Deterministic secret for Telegram's X-Telegram-Bot-Api-Secret-Token.
+
+    Derived from the bot token so webhook mode needs no extra configuration.
+    """
+    return hashlib.sha256(f"ytmd:{BOT_TOKEN}".encode()).hexdigest()[:32]
 
 
 def handle_message(msg: dict, cookies: str | None):
