@@ -1,7 +1,8 @@
 # ytmd — Telegram YouTube Music Downloader
 
-A Telegram bot that converts YouTube Music (and regular YouTube) links into
-MP3s — free, no server to rent.
+A Telegram bot that converts YouTube Music (`music.youtube.com`) links into
+audio files — free, no server to rent. Regular YouTube links are rejected;
+only YouTube Music links are accepted.
 
 Three ways to run the same code — pick one:
 

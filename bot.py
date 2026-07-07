@@ -8,8 +8,9 @@ Two run modes:
               host): replies within seconds. Also serves a tiny HTTP
               health endpoint on $PORT so free web-service tiers accept it.
 
-For every message containing a YouTube / YouTube Music URL, the bot
-downloads the audio with yt-dlp and sends it back as a tagged MP3.
+For every message containing a YouTube Music (music.youtube.com) URL, the
+bot downloads the audio with yt-dlp and sends it back. Regular YouTube
+links are rejected with a hint.
 
 Required environment:
   TELEGRAM_BOT_TOKEN  - bot token from @BotFather
@@ -41,17 +42,21 @@ API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 # Telegram bots can upload files up to 50 MB.
 MAX_UPLOAD_BYTES = 49 * 1024 * 1024
 
-YOUTUBE_URL_RE = re.compile(
-    r"https?://(?:www\.|m\.|music\.)?"
-    r"(?:youtube\.com/(?:watch\?[^\s]*v=[\w-]{11}[^\s]*|shorts/[\w-]{11}[^\s]*)"
-    r"|youtu\.be/[\w-]{11}[^\s]*)",
+YT_MUSIC_URL_RE = re.compile(
+    r"https?://music\.youtube\.com/watch\?[^\s]*v=[\w-]{11}[^\s]*",
+    re.IGNORECASE,
+)
+
+# Recognized only to explain the rejection — never downloaded.
+OTHER_YOUTUBE_URL_RE = re.compile(
+    r"https?://(?:www\.|m\.)?(?:youtube\.com/|youtu\.be/)\S+",
     re.IGNORECASE,
 )
 
 START_TEXT = (
-    "Hi! Send me a YouTube Music (or regular YouTube) link and I'll reply "
-    "with the audio file.\n\n"
-    "Example:\nhttps://music.youtube.com/watch?v=dQw4w9WgXcQ"
+    "Hi! Send me a YouTube Music link and I'll reply with the audio file.\n\n"
+    "Example:\nhttps://music.youtube.com/watch?v=dQw4w9WgXcQ\n\n"
+    "Only music.youtube.com links are accepted."
 )
 
 
@@ -216,8 +221,8 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
 
     raise RuntimeError(
         "this track isn't playable from the bot's server region (a YouTube "
-        "Music region-locked ID). Try sending the regular youtube.com link "
-        "for the same song, or add a YTDLP_COOKIES secret (see README)."
+        "Music region-locked ID) and the title-search fallback found no "
+        "match. Adding a YTDLP_COOKIES secret (see README) usually fixes it."
     ) from last_exc
 
 
@@ -282,12 +287,20 @@ def handle_message(msg: dict, cookies: str | None):
         send_text(chat_id, START_TEXT)
         return
 
-    urls = YOUTUBE_URL_RE.findall(text)
+    urls = YT_MUSIC_URL_RE.findall(text)
     if not urls:
-        if msg["chat"].get("type") == "private":
+        if OTHER_YOUTUBE_URL_RE.search(text):
             send_text(
                 chat_id,
-                "I couldn't find a YouTube / YouTube Music link in that message. "
+                "That's a regular YouTube link — I only accept YouTube Music "
+                "links (music.youtube.com). Open the song in YouTube Music "
+                "and use Share to copy its link.",
+                reply_to=message_id,
+            )
+        elif msg["chat"].get("type") == "private":
+            send_text(
+                chat_id,
+                "I couldn't find a YouTube Music link in that message. "
                 "Send me a link like https://music.youtube.com/watch?v=...",
                 reply_to=message_id,
             )
