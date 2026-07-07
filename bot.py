@@ -35,6 +35,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import requests
 import yt_dlp
+from ytmusicapi import YTMusic
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
@@ -179,14 +180,40 @@ def _oembed_query(video_id: str) -> str | None:
     return None
 
 
+def _music_track_query(video_id: str) -> str | None:
+    """Title/artist straight from YouTube Music's own API (ytmusicapi)."""
+    try:
+        details = YTMusic().get_song(video_id).get("videoDetails") or {}
+        title = details.get("title") or ""
+        author = (details.get("author") or "").removesuffix(" - Topic")
+        query = f"{author} {title}".strip()
+        return query or None
+    except Exception:
+        return None
+
+
+def _music_search_id(query: str, exclude: str | None) -> str | None:
+    """Top matching *song* on YouTube Music for the query (songs only —
+    never regular YouTube videos)."""
+    try:
+        for result in YTMusic().search(query, filter="songs", limit=5):
+            vid = result.get("videoId")
+            if vid and vid != exclude:
+                return vid
+    except Exception:
+        pass
+    return None
+
+
 def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, dict]:
     """Download a single track. Returns (filepath, info).
 
     YouTube Music art-track IDs are region/distributor-dependent: an ID
     that plays for the user can be "Video unavailable" from the server's
     region (yt-dlp #14066). Fallback chain: direct download -> retry with
-    the YouTube Music player client -> find the same track by title via
-    oEmbed and download the top search match.
+    the YouTube Music player client -> resolve the track via YouTube
+    Music's API (ytmusicapi): fetch its title/artist, search songs-only,
+    and download the matching music.youtube.com track.
     """
     opts, have_ffmpeg = _ydl_opts(workdir, cookies)
 
@@ -212,10 +239,21 @@ def download_audio(url: str, workdir: str, cookies: str | None) -> tuple[str, di
             last_exc = exc
 
     video_id = _video_id(url)
-    query = _oembed_query(video_id) if video_id else None
-    if query:
+    query = None
+    if video_id:
+        query = _music_track_query(video_id) or _oembed_query(video_id)
+    alt_id = _music_search_id(query, exclude=video_id) if query else None
+    if alt_id:
+        music_opts = {
+            **opts,
+            "extractor_args": {"youtube": {"player_client": ["web_music"]}},
+        }
         try:
-            return _extract(f"ytsearch1:{query}", opts, have_ffmpeg)
+            return _extract(
+                f"https://music.youtube.com/watch?v={alt_id}",
+                music_opts,
+                have_ffmpeg,
+            )
         except yt_dlp.utils.DownloadError:
             pass
 

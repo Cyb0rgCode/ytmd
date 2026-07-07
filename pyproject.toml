@@ -5,6 +5,7 @@ description = "Telegram bot that turns YouTube Music links into audio files"
 requires-python = ">=3.11"
 dependencies = [
     "yt-dlp",
+    "ytmusicapi",
     "requests",
     "mutagen",
 ]

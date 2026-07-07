@@ -104,8 +104,11 @@ default branch (or run it manually once).
 - **Region-locked YouTube Music IDs:** some music.youtube.com track IDs only
   play in certain countries (auto-generated "art tracks" get different IDs
   per distributor/region). The bot handles this automatically: it retries
-  with the YouTube Music player client, then falls back to finding the same
-  track by title and downloading the closest match.
+  with the YouTube Music player client, then resolves the track through
+  YouTube Music's own API ([ytmusicapi](https://github.com/sigma67/ytmusicapi))
+  — title/artist lookup plus a songs-only search — and downloads the
+  matching music.youtube.com track. It never substitutes regular YouTube
+  videos.
 - **YouTube bot checks:** datacenter IPs (Vercel, GitHub, etc.) occasionally
   get blocked by YouTube ("Sign in to confirm you're not a bot"). If
   downloads start failing with that error, export your browser cookies for
